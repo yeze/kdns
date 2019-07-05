@@ -1,5 +1,3 @@
-#define _GNU_SOURCE
-
 #include <pthread.h>
 #include <rte_mbuf.h>
 #include <rte_ether.h>

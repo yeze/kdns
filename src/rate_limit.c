@@ -45,6 +45,7 @@ typedef struct {
 static rate_limit_ctrl rl_ctrl[MAX_CORES];
 static struct rte_hash *rl_hmap[MAX_CORES];
 static rate_limit_hnode *rl_harray[MAX_CORES];
+static struct rte_meter_srtcm_profile rl_profile[MAX_CORES][RATE_LIMIT_TYPE_MAX];
 
 static const char *rl_type_str_array[RATE_LIMIT_TYPE_MAX] = {
     "all",
@@ -84,11 +85,10 @@ int rate_limit(uint32_t sip, rate_limit_type type, unsigned lcore_id) {
 
     now = rte_rdtsc();
     hnode = &rl_harray[lcore_id][ret];
-    if (rte_meter_srtcm_color_blind_check(&hnode->rl_meter[type], now, 1) == e_RTE_METER_RED) {
+    if (rte_meter_srtcm_color_blind_check(&hnode->rl_meter[type], &rl_profile[lcore_id][type], now, 1) == e_RTE_METER_RED) {
         ++hnode->exceeded_cnt;
-        if (rte_meter_srtcm_color_blind_check(&hnode->rl_meter[RATE_LIMIT_TYPE_EXCEEDED_LOG], now, 1) != e_RTE_METER_RED) {
-            log_msg(LOG_ERR, "query from %s, %s rate limit exceeded %d, in slave lcore %u, drop\n",
-                    inet_ntoa(*(struct in_addr *)&sip), rate_limit_type_str(type), hnode->exceeded_cnt, lcore_id);
+        if (rte_meter_srtcm_color_blind_check(&hnode->rl_meter[RATE_LIMIT_TYPE_EXCEEDED_LOG], &rl_profile[lcore_id][RATE_LIMIT_TYPE_EXCEEDED_LOG], now, 1) != e_RTE_METER_RED) {
+            log_msg(LOG_ERR, "query from %s, %s rate limit exceeded %d, drop\n", inet_ntoa(*(struct in_addr *)&sip), rate_limit_type_str(type), hnode->exceeded_cnt);
             hnode->exceeded_cnt = 0;
         }
         return -1;
@@ -148,7 +148,12 @@ int rate_limit_init(uint32_t all_per_second, uint32_t fwd_per_second, uint32_t c
             meter_params[i].cbs = rl_ctrl[lcore_id].rl_ps[i];
             meter_params[i].ebs = rl_ctrl[lcore_id].rl_ps[i] / 2;
 
-            ret = rte_meter_srtcm_config(&tmp.rl_meter[i], &meter_params[i]);
+            ret = rte_meter_srtcm_profile_config(&rl_profile[lcore_id][i], &meter_params[i]);
+            if (ret) {
+                log_msg(LOG_ERR, "Failed to init %s meter srtcm profile config!\n", rate_limit_type_str(i));
+                exit(-1);
+            }
+            ret = rte_meter_srtcm_config(&tmp.rl_meter[i], &rl_profile[lcore_id][i]);
             if (ret) {
                 log_msg(LOG_ERR, "Failed to init %s meter srtcm config!\n", rate_limit_type_str(i));
                 exit(-1);

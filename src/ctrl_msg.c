@@ -30,7 +30,7 @@ static struct ctrl_msg_manage ctrl_msg_mt;
 static int ctrl_msg_ingress(struct rte_ring *ring, void **msg, uint16_t msg_cnt) {
     uint16_t nb_tx;
 
-    nb_tx = rte_ring_enqueue_burst(ring, msg, msg_cnt);
+    nb_tx = rte_ring_enqueue_burst(ring, msg, msg_cnt, NULL);
     if (unlikely(nb_tx < msg_cnt)) {
         uint16_t s_cnt = nb_tx;
         log_msg(LOG_ERR, "%s packet loss due to full ring, loss %d\n", ring->name, msg_cnt - nb_tx);
@@ -54,7 +54,7 @@ uint16_t ctrl_msg_slave_process(unsigned slave_lcore) {
     uint16_t i, nb_rx;
     ctrl_msg *msg[NETIF_MAX_PKT_BURST];
 
-    nb_rx = rte_ring_dequeue_burst(ctrl_msg_ring[slave_lcore], (void **)msg, NETIF_MAX_PKT_BURST);
+    nb_rx = rte_ring_dequeue_burst(ctrl_msg_ring[slave_lcore], (void **)msg, NETIF_MAX_PKT_BURST, NULL);
     if (likely(nb_rx == 0)) {
         return 0;
     }
@@ -80,7 +80,7 @@ uint16_t ctrl_msg_master_process(void) {
     ctrl_msg *msg[NETIF_MAX_PKT_BURST];
     ctrl_msg *msg_copy[NETIF_MAX_PKT_BURST];
 
-    nb_rx = rte_ring_dequeue_burst(ctrl_msg_ring[master_lcore], (void **)msg, NETIF_MAX_PKT_BURST);
+    nb_rx = rte_ring_dequeue_burst(ctrl_msg_ring[master_lcore], (void **)msg, NETIF_MAX_PKT_BURST, NULL);
     if (likely(nb_rx == 0)) {
         return 0;
     }

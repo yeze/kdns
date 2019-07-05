@@ -1,8 +1,6 @@
 #ifndef _FORWARD_H_
 #define _FORWARD_H_
 
-#define _GNU_SOURCE
-
 #include <pthread.h>
 #include <rte_mbuf.h>
 #include <arpa/inet.h>

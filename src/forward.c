@@ -2,8 +2,6 @@
  * forward.c 
  */
 
-#define _GNU_SOURCE
-
 #include <pthread.h>
 
 #include <string.h>
@@ -202,26 +200,25 @@ int fwd_query_enqueue(struct rte_mbuf *pkt, uint32_t src_addr, uint16_t id, uint
 }
 
 unsigned fwd_response_dequeue(struct rte_mbuf **pkts, unsigned pkts_cnt) {
-    unsigned i;
+    unsigned i, nb_rx;
     fwd_qnode *response[NETIF_MAX_PKT_BURST];
 
-    pkts_cnt = RTE_MIN(rte_ring_count(g_fwd_response_ring), pkts_cnt);
-    while (pkts_cnt > 0 && unlikely(rte_ring_dequeue_bulk(g_fwd_response_ring, (void **)response, pkts_cnt) != 0)) {
-        pkts_cnt = (uint16_t)RTE_MIN(rte_ring_count(g_fwd_response_ring), pkts_cnt);
-    }
-    if (pkts_cnt > 0) {
-        for (i = 0; i < pkts_cnt; ++i) {
-            pkts[i] = response[i]->pkt;
-#ifdef ENABLE_KDNS_FWD_METRICS
-            metrics_domain_update(response[i]->domain_name, response[i]->query_time);
-            metrics_domain_clientIp_update(response[i]->domain_name, response[i]->query_time, response[i]->src_addr);
-#endif
-            free(response[i]);
-        }
-        rte_atomic64_add(&dns_fwd_snd, pkts_cnt);
+    nb_rx = rte_ring_dequeue_burst(g_fwd_response_ring, (void **)response, pkts_cnt, NULL);
+    if (likely(nb_rx == 0)) {
+        return 0;
     }
 
-    return pkts_cnt;
+    for (i = 0; i < nb_rx; ++i) {
+        pkts[i] = response[i]->pkt;
+#ifdef ENABLE_KDNS_FWD_METRICS
+        metrics_domain_update(response[i]->domain_name, response[i]->query_time);
+        metrics_domain_clientIp_update(response[i]->domain_name, response[i]->query_time, response[i]->src_addr);
+#endif
+        free(response[i]);
+    }
+    rte_atomic64_add(&dns_fwd_snd, nb_rx);
+
+    return nb_rx;
 }
 
 static int fwd_query_response(fwd_manage *manage, fwd_qnode *query) {

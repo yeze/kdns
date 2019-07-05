@@ -54,7 +54,6 @@ struct net_device {
     uint16_t max_tx_queues;
     uint16_t max_rx_desc;
     uint16_t max_tx_desc;
-    struct ether_addr hwaddr;
 
     struct netif_queue_conf l_netif_queue_conf[RTE_MAX_LCORE];
 };

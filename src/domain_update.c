@@ -679,7 +679,7 @@ static void *statistics_reset(__attribute__((unused)) struct connection_info_str
 }
 
 static void *statistics_port_get(__attribute__((unused)) struct connection_info_struct *con_info, __attribute__((unused)) char *url, int *len_response) {
-    uint8_t port_id = 0;
+    uint16_t port_id = 0;
     unsigned lcore_id;
     struct rte_eth_stats eth_stats;
 
@@ -753,7 +753,7 @@ static void *statistics_port_get(__attribute__((unused)) struct connection_info_
 }
 
 static void *statistics_port_reset(__attribute__((unused)) struct connection_info_struct *con_info, __attribute__((unused)) char *url, int *len_response) {
-    uint8_t port_id = 0;
+    uint16_t port_id = 0;
 
     rte_eth_stats_reset(port_id);
 

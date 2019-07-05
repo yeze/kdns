@@ -13,6 +13,7 @@
 #include "rte_kni.h"
 #include <rte_ip.h>
 #include <rte_udp.h>
+#include <rte_bus_pci.h>
 #include "netdev.h"
 #include "dns-conf.h"
 #include "util.h"
@@ -42,11 +43,8 @@ struct net_device kdns_net_device;
 /* Options for configuring ethernet port */
 static struct rte_eth_conf port_conf = {
     .rxmode = {
-        .header_split = 0,      /* Header Split disabled */
-        .hw_ip_checksum = 0,    /* IP checksum offload disabled */
-        .hw_vlan_filter = 0,    /* VLAN filtering disabled */
-        .jumbo_frame = 0,       /* Jumbo Frame Support disabled */
-        .hw_strip_crc = 0,      /* CRC stripped by hardware */
+        .max_rx_pkt_len = ETHER_MAX_LEN,
+        .split_hdr_size = 0,
     },
     .txmode = {
         .mq_mode = ETH_MQ_TX_NONE,
@@ -58,11 +56,6 @@ static struct rte_eth_conf port_conf_rss = {
         .mq_mode    = ETH_MQ_RX_RSS,
         .max_rx_pkt_len = ETHER_MAX_LEN,
         .split_hdr_size = 0,
-        .header_split   = 0, /**< Header Split disabled */
-        .hw_ip_checksum = 0, /**< IP checksum offload enabled */
-        .hw_vlan_filter = 0, /**< VLAN filtering disabled */
-        .jumbo_frame    = 0, /**< Jumbo Frame Support disabled */
-        .hw_strip_crc   = 0, /**< CRC stripped by hardware */
     },
     .rx_adv_conf = {
         .rss_conf = {
@@ -134,7 +127,7 @@ static char *flowtype_to_str(uint16_t flow_type) {
     return NULL;
 }
 
-static void check_port_flow_type_rss_offloads(uint8_t port_id) {
+static void check_port_flow_type_rss_offloads(uint16_t port_id) {
     int i;
     char *p;
     struct rte_eth_dev_info dev_info;
@@ -233,10 +226,11 @@ static void netif_queue_core_bind(uint8_t port_id) {
     }
 }
 
-static void kdns_port_init(uint8_t port_id) {
+static void kdns_port_init(uint16_t port_id) {
     int ret;
     uint16_t q;
     struct rte_eth_conf conf;
+    struct rte_eth_dev_info dev_info;
 
     int mode = g_dns_cfg->netdev.mode;
     uint16_t nb_rx_q = g_dns_cfg->netdev.rxq_num;
@@ -257,9 +251,20 @@ static void kdns_port_init(uint8_t port_id) {
     } else {
         memcpy(&conf, &port_conf, sizeof(conf));
     }
+    rte_eth_dev_info_get(port_id, &dev_info);
+    if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_MBUF_FAST_FREE) {
+        conf.txmode.offloads |= DEV_TX_OFFLOAD_MBUF_FAST_FREE;
+    }
+    conf.rx_adv_conf.rss_conf.rss_hf &= dev_info.flow_type_rss_offloads;
+
     ret = rte_eth_dev_configure(port_id, nb_rx_q, nb_tx_q, &conf);
     if (ret < 0) {
         log_msg(LOG_ERR, "Could not configure port(%u) ret(%d)\n", port_id, ret);
+        exit(-1);
+    }
+    ret = rte_eth_dev_adjust_nb_rx_tx_desc(port_id, &nb_rx_desc, &nb_tx_desc);
+    if (ret < 0) {
+        log_msg(LOG_ERR, "Could not adjust number of descriptors for port(%u) (%d)\n", port_id, ret);
         exit(-1);
     }
     for (q = 0; q < nb_rx_q; ++q) {
@@ -286,13 +291,13 @@ static void kdns_port_init(uint8_t port_id) {
     rte_eth_promiscuous_enable(port_id);
 }
 
-static int kni_config_network_interface(uint8_t port_id, uint8_t if_up) {
+static int kni_config_network_interface(uint16_t port_id, uint8_t if_up) {
     int ret = 0;
 
     (void)port_id;
     (void)if_up;
 #if 0
-    if (port_id >= rte_eth_dev_count() || port_id >= RTE_MAX_ETHPORTS) {
+    if (port_id >= rte_eth_dev_count_avail() || port_id >= RTE_MAX_ETHPORTS) {
         log_msg(LOG_ERR, "Invalid port id %d\n", port_id);
         return -EINVAL;
     }
@@ -313,7 +318,7 @@ static int kni_config_network_interface(uint8_t port_id, uint8_t if_up) {
     return ret;
 }
 
-static int kni_change_mtu(uint8_t port_id, unsigned new_mtu) {
+static int kni_change_mtu(uint16_t port_id, unsigned new_mtu) {
     (void)port_id;
     (void)new_mtu;
 #if 0
@@ -324,7 +329,7 @@ static int kni_change_mtu(uint8_t port_id, unsigned new_mtu) {
     uint16_t nb_rx_q = g_dns_cfg->netdev.rxq_num;
     uint16_t nb_tx_q = g_dns_cfg->netdev.txq_num;
 
-    if (port_id >= rte_eth_dev_count()) {
+    if (port_id >= rte_eth_dev_count_avail()) {
         log_msg(LOG_ERR, "Invalid port id %d\n", port_id);
         return -EINVAL;
     }
@@ -375,10 +380,12 @@ __attribute__((unused)) static int kdns_kni_deinit(uint8_t port_id) {
     return 0;
 }
 
-static int kdns_kni_init(uint8_t port_id) {
+static int kdns_kni_init(uint16_t port_id) {
     struct rte_kni_ops ops;
     struct rte_kni_conf conf;
     struct rte_eth_dev_info dev_info;
+    const struct rte_pci_device *pci_dev;
+    const struct rte_bus *bus = NULL;
 
     if (g_dns_cfg->netdev.pmd != PMD_TYPE_PHYSICAL) {
         log_msg(LOG_INFO, "No need to create kni for port: %d\n", port_id);
@@ -399,19 +406,29 @@ static int kdns_kni_init(uint8_t port_id) {
     memset(&conf, 0, sizeof(conf));
     conf.core_id = 0;
     conf.force_bind = 1;
-    conf.group_id = (uint16_t)port_id;
+    conf.group_id = port_id;
     conf.mbuf_size = RTE_MBUF_DEFAULT_DATAROOM;
     snprintf(conf.name, sizeof(conf.name), "%s", kni_name);
 
     memset(&dev_info, 0, sizeof(dev_info));
     rte_eth_dev_info_get(port_id, &dev_info);
-    conf.addr = dev_info.pci_dev->addr;
-    conf.id = dev_info.pci_dev->id;
+    if (dev_info.device) {
+        bus = rte_bus_find_by_device(dev_info.device);
+    }
+    if (bus && !strcmp(bus->name, "pci")) {
+        pci_dev = RTE_DEV_TO_PCI(dev_info.device);
+        conf.addr = pci_dev->addr;
+        conf.id = pci_dev->id;
+    }
+
+    rte_eth_macaddr_get(port_id, (struct ether_addr *)&conf.mac_addr);
+    rte_eth_dev_get_mtu(port_id, &conf.mtu);
 
     memset(&ops, 0, sizeof(ops));
     ops.port_id = port_id;
     ops.change_mtu = kni_change_mtu;
     ops.config_network_if = kni_config_network_interface;
+    //ops.config_mac_address = kni_config_mac_address;
 
     kdns_kni = rte_kni_alloc(kni_mbuf_pool, &conf, &ops);
     if (!kdns_kni) {
@@ -419,18 +436,11 @@ static int kdns_kni_init(uint8_t port_id) {
         exit(-1);
     }
 
-    rte_eth_macaddr_get(port_id, &kdns_net_device.hwaddr);
-    if (linux_set_if_mac(conf.name, (unsigned char *)&kdns_net_device.hwaddr) != 0) {
-        char str_mac[ETHER_ADDR_FMT_SIZE];
-        ether_format_addr(str_mac, ETHER_ADDR_FMT_SIZE, &kdns_net_device.hwaddr);
-        log_msg(LOG_ERR, "Fail to set mac %s for %s: %s\n", str_mac, conf.name, strerror(errno));
-        exit(-1);
-    }
     return 0;
 }
 
 int kdns_netdev_init(void) {
-    uint8_t nb_sys_ports = rte_eth_dev_count();
+    uint8_t nb_sys_ports = rte_eth_dev_count_avail();
     if (nb_sys_ports == 0) {
         log_msg(LOG_ERR, "No supported Ethernet device found\n");
         exit(-1);
@@ -440,7 +450,7 @@ int kdns_netdev_init(void) {
         exit(-1);
     }
 
-    uint8_t port_id = 0;
+    uint16_t port_id = 0;
     kdns_port_init(port_id);
     kdns_kni_init(port_id);
     check_all_ports_link_status(nb_sys_ports, 1);

@@ -10,7 +10,8 @@ ifeq ($(machine),)
 machine = native
 endif
 
-RTE_SDK = $(CURDIR)/dpdk-17.02
+RTE_SDK_TAR = $(CURDIR)/dpdk-18.11.2.tar.xz
+RTE_SDK = $(CURDIR)/dpdk-stable-18.11.2
 export RTE_SDK
 
 # Default target, can be overriden by command line or environment
@@ -30,13 +31,14 @@ all: dpdk deps kdns bin
 
 .PHONY: dpdk
 dpdk:
+	$(Q)rm -fr $(RTE_SDK)
+	$(Q)tar -xvf $(RTE_SDK_TAR)
 	$(Q)cd $(RTE_SDK) && $(MAKE) O=$(RTE_TARGET) T=$(RTE_TARGET) config
 	$(Q)cd $(RTE_SDK) && sed -ri 's,(RTE_MACHINE=).*,\1$(machine),' $(RTE_TARGET)/.config
 	$(Q)cd $(RTE_SDK) && sed -ri 's,(RTE_APP_TEST=).*,\1n,'         $(RTE_TARGET)/.config
 	$(Q)cd $(RTE_SDK) && sed -ri 's,(RTE_LIBRTE_PMD_PCAP=).*,\1y,'  $(RTE_TARGET)/.config
 	$(Q)cd $(RTE_SDK) && sed -ri 's,(RTE_KNI_KMOD_ETHTOOL=).*,\1n,' $(RTE_TARGET)/.config
-	$(Q)cd $(RTE_SDK) && sed -ri 's,(RTE_EAL_NUMA_AWARE_HUGEPAGES=).*,\1n,' $(RTE_TARGET)/.config
-	$(Q)cd $(RTE_SDK) && sed -ri 's,(RTE_LIBRTE_VHOST_NUMA=).*,\1n,' $(RTE_TARGET)/.config
+	$(Q)cd $(RTE_SDK) && sed -ri 's,(CFG_VALUE_LEN ).*,\1(2048),'   $(RTE_SDK)/lib/librte_cfgfile/rte_cfgfile.h
 	$(Q)cd $(RTE_SDK) && $(MAKE) O=$(RTE_TARGET)
 
 .PHONY: deps
