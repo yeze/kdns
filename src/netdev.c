@@ -14,6 +14,7 @@
 #include <rte_ip.h>
 #include <rte_udp.h>
 #include <rte_bus_pci.h>
+#include <rte_malloc.h>
 #include "netdev.h"
 #include "dns-conf.h"
 #include "util.h"
@@ -199,7 +200,7 @@ struct netif_queue_conf *netif_queue_conf_get(uint16_t lcore_id) {
     return &kdns_net_device.l_netif_queue_conf[lcore_id];
 }
 
-static void netif_queue_core_bind(uint8_t port_id) {
+static void netif_queue_config_init(uint16_t port_id) {
     int rx_id = 0;
     int tx_id = 0;
     int port_socket_id = rte_eth_dev_socket_id(port_id);
@@ -209,10 +210,18 @@ static void netif_queue_core_bind(uint8_t port_id) {
         log_msg(LOG_INFO, "core queue info: coreId(%d) coreSocketId(%u) portID(%d) portSocketId(%d) rxQueueId(%d) txQueueId(%d)\n",
                 lcore_id, lcore_config[lcore_id].socket_id, port_id, port_socket_id, rx_id, tx_id);
 
-        memset(&kdns_net_device.l_netif_queue_conf[lcore_id], 0, sizeof(struct netif_queue_conf));
-        kdns_net_device.l_netif_queue_conf[lcore_id].port_id = port_id;
-        kdns_net_device.l_netif_queue_conf[lcore_id].rx_queue_id = rx_id;
-        kdns_net_device.l_netif_queue_conf[lcore_id].tx_queue_id = tx_id;
+        struct netif_queue_conf *conf =  netif_queue_conf_get(lcore_id);
+        memset(conf, 0, sizeof(struct netif_queue_conf));
+        conf->port_id = port_id;
+        conf->rx_queue_id = rx_id;
+        conf->tx_queue_id = tx_id;
+        conf->tx_buffer = rte_zmalloc_socket("tx_buffer", RTE_ETH_TX_BUFFER_SIZE(NETIF_MAX_PKT_BURST), 0, port_socket_id);
+        if (conf->tx_buffer == NULL) {
+            log_msg(LOG_ERR, "Can't allocate tx buffer for port %u, tx queue %u\n", port_id, tx_id);
+            exit(-1);
+        }
+        rte_eth_tx_buffer_init(conf->tx_buffer, NETIF_MAX_PKT_BURST);
+        rte_eth_tx_buffer_set_err_callback(conf->tx_buffer, rte_eth_tx_buffer_count_callback, &conf->stats.pkt_dropped);
 
         if (rx_id < RTE_ETHDEV_QUEUE_STAT_CNTRS) {
             rte_eth_dev_set_rx_queue_stats_mapping(port_id, rx_id, rx_id);
@@ -281,7 +290,7 @@ static void kdns_port_init(uint16_t port_id) {
             exit(-1);
         }
     }
-    netif_queue_core_bind(port_id);
+    netif_queue_config_init(port_id);
 
     ret = rte_eth_dev_start(port_id);
     if (ret < 0) {

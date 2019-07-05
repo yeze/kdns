@@ -37,13 +37,10 @@ extern char *dns_procname;
 static int tx_msg_slave_process(ctrl_msg *msg, unsigned slave_lcore) {
     ctrl_mbufs_msg *mmsg = (ctrl_mbufs_msg *)msg;
 
+    int i;
     struct netif_queue_conf *conf = netif_queue_conf_get(slave_lcore);
-    uint16_t cnts = rte_eth_tx_burst(conf->port_id, conf->tx_queue_id, mmsg->mbufs, mmsg->mbufs_cnts);
-    if (unlikely(cnts < mmsg->mbufs_cnts)) {
-        log_msg(LOG_ERR, "Failed to send %u pkt to tx_queue %u on slave_lcore %u\n", mmsg->mbufs_cnts - cnts, conf->tx_queue_id, slave_lcore);
-        do {
-            rte_pktmbuf_free(mmsg->mbufs[cnts]);
-        } while (++cnts < mmsg->mbufs_cnts);
+    for (i = 0; i < mmsg->mbufs_cnts; ++i) {
+        rte_eth_tx_buffer(conf->port_id, conf->tx_queue_id, conf->tx_buffer, mmsg->mbufs[i]);
     }
     free(mmsg);
     return 0;
@@ -220,6 +217,7 @@ int process_slave(__attribute__((unused)) void *arg) {
         if (ctrl_msg_count || now_tsc - prev_tsc > intvl_tsc) {
             prev_tsc = now_tsc;
             ctrl_msg_count = ctrl_msg_slave_process(lcore_id);
+            rte_eth_tx_buffer_flush(conf->port_id, conf->tx_queue_id, conf->tx_buffer);
         }
 
         rx_count = rte_eth_rx_burst(conf->port_id, conf->rx_queue_id, mbufs, NETIF_MAX_PKT_BURST);
@@ -248,15 +246,8 @@ int process_slave(__attribute__((unused)) void *arg) {
 
         // send the pkts
         if (likely(conf->tx_len > 0)) {
-            int ntx = rte_eth_tx_burst(conf->port_id, conf->tx_queue_id, conf->tx_mbufs, conf->tx_len);
-            conf->stats.dns_pkts_snd += ntx;
-            if (unlikely(ntx != conf->tx_len)) {
-                log_msg(LOG_ERR, "rx=%d, tx=%d, failed tx=%d, on slave=%u\n", rx_count, conf->tx_len, conf->tx_len - ntx, lcore_id);
-                int i = 0;
-                for (i = ntx; i < conf->tx_len; i++) {
-                    rte_pktmbuf_free(conf->tx_mbufs[i]);
-                }
-                conf->stats.pkt_dropped += ntx;
+            for (i = 0; i < conf->tx_len; ++i) {
+                rte_eth_tx_buffer(conf->port_id, conf->tx_queue_id, conf->tx_buffer, conf->tx_mbufs[i]);
             }
         }
         // snd to master

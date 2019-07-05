@@ -47,6 +47,8 @@ struct netif_queue_conf {
 
     uint16_t kni_len;
     struct rte_mbuf *kni_mbufs[NETIF_MAX_PKT_BURST];
+
+    struct rte_eth_dev_tx_buffer *tx_buffer;
 } __rte_cache_aligned;
 
 struct net_device {
