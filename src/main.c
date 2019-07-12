@@ -182,7 +182,7 @@ int main(int argc, char **argv) {
     // struct sigaction action;
     /* Setup the signal handling... */
     init_signals();
-    rte_pdump_init("/var/run/.dpdk");
+    rte_pdump_init();
 
     ctrl_msg_init();
     fwd_server_init();

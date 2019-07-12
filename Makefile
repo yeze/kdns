@@ -10,8 +10,8 @@ ifeq ($(machine),)
 machine = native
 endif
 
-RTE_SDK_TAR = $(CURDIR)/dpdk-18.11.2.tar.xz
-RTE_SDK = $(CURDIR)/dpdk-stable-18.11.2
+RTE_SDK_TAR = $(CURDIR)/dpdk-19.05.tar.xz
+RTE_SDK = $(CURDIR)/dpdk-19.05
 export RTE_SDK
 
 # Default target, can be overriden by command line or environment

@@ -85,9 +85,9 @@ int rate_limit(uint32_t sip, rate_limit_type type, unsigned lcore_id) {
 
     now = rte_rdtsc();
     hnode = &rl_harray[lcore_id][ret];
-    if (rte_meter_srtcm_color_blind_check(&hnode->rl_meter[type], &rl_profile[lcore_id][type], now, 1) == e_RTE_METER_RED) {
+    if (rte_meter_srtcm_color_blind_check(&hnode->rl_meter[type], &rl_profile[lcore_id][type], now, 1) == RTE_COLOR_RED) {
         ++hnode->exceeded_cnt;
-        if (rte_meter_srtcm_color_blind_check(&hnode->rl_meter[RATE_LIMIT_TYPE_EXCEEDED_LOG], &rl_profile[lcore_id][RATE_LIMIT_TYPE_EXCEEDED_LOG], now, 1) != e_RTE_METER_RED) {
+        if (rte_meter_srtcm_color_blind_check(&hnode->rl_meter[RATE_LIMIT_TYPE_EXCEEDED_LOG], &rl_profile[lcore_id][RATE_LIMIT_TYPE_EXCEEDED_LOG], now, 1) != RTE_COLOR_RED) {
             log_msg(LOG_ERR, "query from %s, %s rate limit exceeded %d, drop\n", inet_ntoa(*(struct in_addr *)&sip), rate_limit_type_str(type), hnode->exceeded_cnt);
             hnode->exceeded_cnt = 0;
         }
