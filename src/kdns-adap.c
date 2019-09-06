@@ -22,19 +22,19 @@ void write_pid(const char *pid_file) {
     char val[16];
     size_t len = snprintf(val, sizeof(val), "%u\n", (uint32_t)getpid());
     if (len <= 0) {
-        log_msg(LOG_ERR, "create pid file error (%s)", strerror(errno));
+        printf("create pid file error (%s)", strerror(errno));
     }
     /* create pid file */
     int pidfd = open(pid_file, O_CREAT | O_TRUNC | O_WRONLY /*| O_NOFOLLOW*/, 0644);
     if (pidfd < 0) {
-        log_msg(LOG_ERR, "unable to create pid_file '%s': %s", pid_file, strerror(errno));
+        printf("unable to create pid_file '%s': %s", pid_file, strerror(errno));
     }
     /*  write pid string to it */
     ssize_t r = write(pidfd, val, (uint32_t)len);
     if (r == -1) {
-        log_msg(LOG_ERR, "unable to write pid_file: %s", strerror(errno));
+        printf("unable to write pid_file: %s", strerror(errno));
     } else if ((size_t)r != len) {
-        log_msg(LOG_ERR, "unable to write pid_file: wrote %u of %u bytes.", (uint32_t)r, (uint32_t)len);
+        printf("unable to write pid_file: wrote %u of %u bytes.", (uint32_t)r, (uint32_t)len);
     }
 
     close(pidfd);
@@ -44,13 +44,13 @@ int check_pid(const char *pid_file) {
     if (access(pid_file, F_OK) == 0) {
         FILE *pf = fopen(pid_file, "r");
         if (pf == NULL) {
-            log_msg(LOG_ERR, "Pid file '%s' exists and can not be read.\n", pid_file);
+            printf("Pid file '%s' exists and can not be read.\n", pid_file);
             return -1;
         }
         pid_t pidv;
         if (fscanf(pf, "%d", &pidv) == 1 && kill(pidv, 0) == 0) {
             fclose(pf);
-            log_msg(LOG_ERR, "Pid file '%s' exists. process already running?\n", pid_file);
+            printf("Pid file '%s' exists. process already running?\n", pid_file);
             return -2;
         }
         if (pf != NULL) {
