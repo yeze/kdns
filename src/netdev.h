@@ -61,6 +61,8 @@ struct net_device {
 
 int netdev_mode_parse(const char *entry);
 
+int netdev_pmd_parse(const char *entry);
+
 struct netif_queue_conf *netif_queue_conf_get(uint16_t lcore_id);
 
 int kdns_netdev_init(void);

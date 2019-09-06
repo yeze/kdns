@@ -28,6 +28,7 @@ struct dns_config *g_reload_dns_cfg;
 static void dns_config_init(struct dns_config *cfg) {
     memset(cfg, 0, sizeof(struct dns_config));
 
+    cfg->netdev.pmd = PMD_TYPE_PHYSICAL;
     cfg->netdev.mode = 0;                   //rss
     cfg->netdev.mbuf_num = 65535;
     cfg->netdev.rxq_desc_num = 1024;
@@ -95,6 +96,11 @@ static int eal_config_load(struct rte_cfgfile *cfgfile, struct eal_config *cfg, 
 
 static int netdev_config_load(struct rte_cfgfile *cfgfile, struct netdev_config *cfg) {
     const char *entry;
+
+    entry = rte_cfgfile_get_entry(cfgfile, "NETDEV", "pmd");
+    if (entry) {
+        cfg->pmd = netdev_pmd_parse(entry);
+    }
 
     entry = rte_cfgfile_get_entry(cfgfile, "NETDEV", "mode");
     if (entry) {
@@ -290,6 +296,11 @@ static int config_file_load(struct dns_config *cfg, char *cfgfile_path, char *pr
     ret |= netdev_config_load(cfgfile, &cfg->netdev);
     ret |= common_config_load(cfgfile, &cfg->comm);
 
+    if (cfg->netdev.pmd == PMD_TYPE_AF_PACKET) {
+        snprintf(cfg->eal.argv[cfg->eal.argc++], DPDK_MAX_ARG_LEN, "--vdev=eth_af_packet0,iface=%s,qpairs=%u,framecnt=%u",
+                 cfg->netdev.kni_name_prefix, cfg->netdev.rxq_num, cfg->netdev.rxq_desc_num + cfg->netdev.txq_desc_num);
+    }
+
     rte_cfgfile_close(cfgfile);
     return ret;
 }
@@ -306,6 +317,7 @@ static void dns_config_dump(struct dns_config *cfg) {
     log_msg(LOG_INFO, "\n");
 
     log_msg(LOG_INFO, "NETDEV config:\n");
+    log_msg(LOG_INFO, "\t pmd: %s\n", pmd_type_str(cfg->netdev.pmd));
     log_msg(LOG_INFO, "\t mode: %s\n", cfg->netdev.mode == 0 ? "rss" : "other");
     log_msg(LOG_INFO, "\t mbuf-num: %u\n", cfg->netdev.mbuf_num);
     log_msg(LOG_INFO, "\t rxqueue-len: %u\n", cfg->netdev.rxq_desc_num);

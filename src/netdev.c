@@ -84,6 +84,14 @@ int netdev_mode_parse(const char *entry) {
     }
 }
 
+int netdev_pmd_parse(const char *entry) {
+    printf("netdev_pmd_parse pmd: %s.\n", entry);
+    if (strcasecmp(entry, "af_packet") == 0) {
+        return PMD_TYPE_AF_PACKET;
+    }
+    return PMD_TYPE_PHYSICAL;
+}
+
 static char *flowtype_to_str(uint16_t flow_type) {
     struct flow_type_info {
         char str[32];
@@ -356,10 +364,12 @@ static int kni_change_mtu(uint8_t port_id, unsigned new_mtu) {
 }
 
 __attribute__((unused)) static int kdns_kni_deinit(uint8_t port_id) {
-    if (rte_kni_release(kdns_kni)) {
-        log_msg(LOG_ERR, "Fail to release kni\n");
+    if (kdns_kni) {
+        if (rte_kni_release(kdns_kni)) {
+            log_msg(LOG_ERR, "Fail to release kni\n");
+        }
+        rte_eth_dev_stop(port_id);
     }
-    rte_eth_dev_stop(port_id);
     return 0;
 }
 
@@ -367,6 +377,11 @@ static int kdns_kni_init(uint8_t port_id) {
     struct rte_kni_ops ops;
     struct rte_kni_conf conf;
     struct rte_eth_dev_info dev_info;
+
+    if (g_dns_cfg->netdev.pmd != PMD_TYPE_PHYSICAL) {
+        log_msg(LOG_INFO, "No need to create kni for port: %d\n", port_id);
+        return 0;
+    }
 
     unsigned nb_mbuf = g_dns_cfg->netdev.kni_mbuf_num;
     char *kni_name = g_dns_cfg->netdev.kni_name_prefix;
@@ -433,9 +448,17 @@ int kdns_netdev_init(void) {
 }
 
 void kni_egress(struct rte_mbuf **mbufs, uint16_t nb_mbufs) {
-    uint16_t nb_tx = rte_kni_tx_burst(kdns_kni, mbufs, nb_mbufs);
-    if (unlikely(nb_tx < nb_mbufs)) {
-        log_msg(LOG_ERR, "Failed to send %u pkt to kni\n", nb_mbufs - nb_tx);
+    uint16_t nb_tx = 0;
+
+    if (kdns_kni) {
+        nb_tx = rte_kni_tx_burst(kdns_kni, mbufs, nb_mbufs);
+        if (unlikely(nb_tx < nb_mbufs)) {
+            log_msg(LOG_ERR, "Failed to send %u pkt to kni\n", nb_mbufs - nb_tx);
+            do {
+                rte_pktmbuf_free(mbufs[nb_tx]);
+            } while (++nb_tx < nb_mbufs);
+        }
+    } else {
         do {
             rte_pktmbuf_free(mbufs[nb_tx]);
         } while (++nb_tx < nb_mbufs);
@@ -443,9 +466,12 @@ void kni_egress(struct rte_mbuf **mbufs, uint16_t nb_mbufs) {
 }
 
 int kni_ingress(struct rte_mbuf **mbufs, uint16_t nb_mbufs) {
-    rte_kni_handle_request(kdns_kni);
-
-    return rte_kni_rx_burst(kdns_kni, mbufs, nb_mbufs);
+    if (kdns_kni) {
+        rte_kni_handle_request(kdns_kni);
+        return rte_kni_rx_burst(kdns_kni, mbufs, nb_mbufs);
+    } else {
+        return 0;
+    }
 }
 
 void netif_statsdata_get(struct netif_queue_stats *sta) {

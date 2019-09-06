@@ -48,7 +48,26 @@ struct comm_config {
     uint32_t client_num;
 };
 
+typedef enum {
+    PMD_TYPE_AF_PACKET,
+    PMD_TYPE_PHYSICAL,
+    PMD_TYPE_MAX,
+} pmd_type;
+
+static const char *pmd_str_array[PMD_TYPE_MAX] = {
+        "af_packet",
+        "physical"
+};
+
+static inline const char *pmd_type_str(pmd_type type) {
+    if (unlikely(type < 0 || type >= PMD_TYPE_MAX)) {
+        return "illegal type";
+    }
+    return pmd_str_array[type];
+}
+
 struct netdev_config {
+    pmd_type pmd;
     int mode;              //rss: 0, other: 1
 
     uint32_t mbuf_num;
