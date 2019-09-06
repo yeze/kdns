@@ -44,7 +44,7 @@ struct net_device kdns_net_device;
 /* Options for configuring ethernet port */
 static struct rte_eth_conf port_conf = {
     .rxmode = {
-        .max_rx_pkt_len = ETHER_MAX_LEN,
+        .max_rx_pkt_len = RTE_ETHER_MAX_LEN,
         .split_hdr_size = 0,
     },
     .txmode = {
@@ -55,7 +55,7 @@ static struct rte_eth_conf port_conf = {
 static struct rte_eth_conf port_conf_rss = {
     .rxmode = {
         .mq_mode    = ETH_MQ_RX_RSS,
-        .max_rx_pkt_len = ETHER_MAX_LEN,
+        .max_rx_pkt_len = RTE_ETHER_MAX_LEN,
         .split_hdr_size = 0,
     },
     .rx_adv_conf = {
@@ -354,7 +354,7 @@ static int kni_change_mtu(uint16_t port_id, unsigned new_mtu) {
     }
 
     /* Set new MTU */
-    if (new_mtu > ETHER_MAX_LEN) {
+    if (new_mtu > RTE_ETHER_MAX_LEN) {
         conf.rxmode.jumbo_frame = 1;
     } else {
         conf.rxmode.jumbo_frame = 0;
@@ -430,7 +430,7 @@ static int kdns_kni_init(uint16_t port_id) {
         conf.id = pci_dev->id;
     }
 
-    rte_eth_macaddr_get(port_id, (struct ether_addr *)&conf.mac_addr);
+    rte_eth_macaddr_get(port_id, (struct rte_ether_addr *)&conf.mac_addr);
     rte_eth_dev_get_mtu(port_id, &conf.mtu);
 
     memset(&ops, 0, sizeof(ops));
@@ -556,17 +556,17 @@ void netif_statsdata_metrics_reset(void) {
     return;
 }
 
-void init_dns_packet_header(struct ether_hdr *eth_hdr, struct ipv4_hdr *ipv4_hdr, struct udp_hdr *udp_hdr, uint16_t data_len) {
-    uint16_t udp_data_len = sizeof(struct udp_hdr) + data_len;
-    uint16_t ipv4_data_len = sizeof(struct ipv4_hdr) + udp_data_len;
+void init_dns_packet_header(struct rte_ether_hdr *eth_hdr, struct rte_ipv4_hdr *ipv4_hdr, struct rte_udp_hdr *udp_hdr, uint16_t data_len) {
+    uint16_t udp_data_len = sizeof(struct rte_udp_hdr) + data_len;
+    uint16_t ipv4_data_len = sizeof(struct rte_ipv4_hdr) + udp_data_len;
     /*
      * Initialize ETHER header.
      */
-    struct ether_addr tmp_mac;
-    ether_addr_copy(&eth_hdr->d_addr, &tmp_mac);
-    ether_addr_copy(&eth_hdr->s_addr, &eth_hdr->d_addr);
-    ether_addr_copy(&tmp_mac, &eth_hdr->s_addr);
-    eth_hdr->ether_type = rte_cpu_to_be_16(ETHER_TYPE_IPv4);
+    struct rte_ether_addr tmp_mac;
+    rte_ether_addr_copy(&eth_hdr->d_addr, &tmp_mac);
+    rte_ether_addr_copy(&eth_hdr->s_addr, &eth_hdr->d_addr);
+    rte_ether_addr_copy(&tmp_mac, &eth_hdr->s_addr);
+    eth_hdr->ether_type = rte_cpu_to_be_16(RTE_ETHER_TYPE_IPV4);
 
     /*
      * Initialize IP header.

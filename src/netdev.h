@@ -78,6 +78,6 @@ void netif_statsdata_reset(void);
 
 void netif_statsdata_metrics_reset(void);
 
-void init_dns_packet_header(struct ether_hdr *eth_hdr, struct ipv4_hdr *ipv4_hdr, struct udp_hdr *udp_hdr, uint16_t data_len);
+void init_dns_packet_header(struct rte_ether_hdr *eth_hdr, struct rte_ipv4_hdr *ipv4_hdr, struct rte_udp_hdr *udp_hdr, uint16_t data_len);
 
 #endif

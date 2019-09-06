@@ -222,9 +222,9 @@ unsigned fwd_response_dequeue(struct rte_mbuf **pkts, unsigned pkts_cnt) {
 }
 
 static int fwd_query_response(fwd_manage *manage, fwd_qnode *query) {
-    struct ether_hdr *eth_hdr;
-    struct ipv4_hdr *ipv4_hdr;
-    struct udp_hdr *udp_hdr;
+    struct rte_ether_hdr *eth_hdr;
+    struct rte_ipv4_hdr *ipv4_hdr;
+    struct rte_udp_hdr *udp_hdr;
     uint8_t *query_data;
 
     if (query->ctrl_flag & FWD_CTRL_FLAG_DETECT) {
@@ -233,21 +233,21 @@ static int fwd_query_response(fwd_manage *manage, fwd_qnode *query) {
         return 0;
     }
 
-    uint16_t ether_hdr_offset = sizeof(struct ether_hdr);
-    uint16_t ip_hdr_offset = sizeof(struct ether_hdr) + sizeof(struct ipv4_hdr);
-    uint16_t udp_hdr_offset = sizeof(struct ether_hdr) + sizeof(struct ipv4_hdr) + sizeof(struct udp_hdr);
+    uint16_t ether_hdr_offset = sizeof(struct rte_ether_hdr);
+    uint16_t ip_hdr_offset = sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr);
+    uint16_t udp_hdr_offset = sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr);
 
-    eth_hdr = rte_pktmbuf_mtod(query->pkt, struct ether_hdr *);
-    ipv4_hdr = rte_pktmbuf_mtod_offset(query->pkt, struct ipv4_hdr *, ether_hdr_offset);
-    udp_hdr = rte_pktmbuf_mtod_offset(query->pkt, struct udp_hdr *, ip_hdr_offset);
+    eth_hdr = rte_pktmbuf_mtod(query->pkt, struct rte_ether_hdr *);
+    ipv4_hdr = rte_pktmbuf_mtod_offset(query->pkt, struct rte_ipv4_hdr *, ether_hdr_offset);
+    udp_hdr = rte_pktmbuf_mtod_offset(query->pkt, struct rte_udp_hdr *, ip_hdr_offset);
     query_data = rte_pktmbuf_mtod_offset(query->pkt, uint8_t *, udp_hdr_offset);
 
     init_dns_packet_header(eth_hdr, ipv4_hdr, udp_hdr, manage->rwlen);
     query->pkt->pkt_len = manage->rwlen + udp_hdr_offset;
     query->pkt->data_len = query->pkt->pkt_len;
-    query->pkt->l2_len = sizeof(struct ether_hdr);
-    query->pkt->vlan_tci = ETHER_TYPE_IPv4;
-    query->pkt->l3_len = sizeof(struct ipv4_hdr);
+    query->pkt->l2_len = sizeof(struct rte_ether_hdr);
+    query->pkt->vlan_tci = RTE_ETHER_TYPE_IPV4;
+    query->pkt->l3_len = sizeof(struct rte_ipv4_hdr);
     memcpy(query_data, manage->rwbuf, manage->rwlen);
 
     uint16_t orig_id = htons(query->id);
@@ -354,16 +354,16 @@ static int fwd_query_forward_sendto(int fd, char *data, ssize_t data_len, dns_ad
 }
 
 static int fwd_query_forward_send(fwd_cnode *cnode) {
-    struct ipv4_hdr *ip4_hdr;
-    struct udp_hdr *udp_hdr;
+    struct rte_ipv4_hdr *ip4_hdr;
+    struct rte_udp_hdr *udp_hdr;
     char *query_data;
     int query_len;
 
     fwd_qnode *query = cnode->query;
-    ip4_hdr = rte_pktmbuf_mtod_offset(query->pkt, struct ipv4_hdr *, sizeof(struct ether_hdr));
-    udp_hdr = rte_pktmbuf_mtod_offset(query->pkt, struct udp_hdr*, sizeof(struct ether_hdr) + sizeof(struct ipv4_hdr));
-    query_data = rte_pktmbuf_mtod_offset(query->pkt, char*, sizeof(struct ether_hdr) + sizeof(struct ipv4_hdr) + sizeof(struct udp_hdr));
-    query_len = rte_be_to_cpu_16(udp_hdr->dgram_len) - sizeof(struct udp_hdr);
+    ip4_hdr = rte_pktmbuf_mtod_offset(query->pkt, struct rte_ipv4_hdr *, sizeof(struct rte_ether_hdr));
+    udp_hdr = rte_pktmbuf_mtod_offset(query->pkt, struct rte_udp_hdr*, sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr));
+    query_data = rte_pktmbuf_mtod_offset(query->pkt, char*, sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr));
+    query_len = rte_be_to_cpu_16(udp_hdr->dgram_len) - sizeof(struct rte_udp_hdr);
 
     uint16_t new_id = htons(cnode->new_id);
     memcpy(query_data, &new_id, 2);

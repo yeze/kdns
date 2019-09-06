@@ -76,7 +76,7 @@ int parse_hex_string(char *src, uint8_t *dst, uint32_t *size);
 
 int parse_ipv4_addr(const char *token, struct in_addr *ipv4);
 int parse_ipv6_addr(const char *token, struct in6_addr *ipv6);
-int parse_mac_addr(const char *token, struct ether_addr *addr);
+int parse_mac_addr(const char *token, struct rte_ether_addr *addr);
 int parse_mpls_labels(char *string, uint32_t *labels, uint32_t *n_labels);
 int parse_l4_proto(const char *token, uint8_t *proto);
 
@@ -88,7 +88,7 @@ int str_split(char *str, const char *delim, char *tokens[], int limit);
 int parse_ipv4_port(const char *token, uint32_t *ip, uint16_t *port);
 
 static inline void
-mac_addr_tostring(struct ether_addr *addr, char *buf, size_t len)
+mac_addr_tostring(struct rte_ether_addr *addr, char *buf, size_t len)
 {
 	snprintf(buf, len, "%02x:%02x:%02x:%02x:%02x:%02x", 
 			addr->addr_bytes[0],

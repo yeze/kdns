@@ -102,20 +102,20 @@ static void kni_msg_master_ingress(struct rte_mbuf **mbufs, uint16_t rx_len, str
 }
 
 static int packet_process(struct rte_mbuf *pkt, struct netif_queue_conf *conf, unsigned lcore_id) {
-    uint16_t ether_hdr_offset = sizeof(struct ether_hdr);
-    uint16_t ip_hdr_offset = sizeof(struct ether_hdr) + sizeof(struct ipv4_hdr);
-    uint16_t udp_hdr_offset = sizeof(struct ether_hdr) + sizeof(struct ipv4_hdr) + sizeof(struct udp_hdr);
+    uint16_t ether_hdr_offset = sizeof(struct rte_ether_hdr);
+    uint16_t ip_hdr_offset = sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr);
+    uint16_t udp_hdr_offset = sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr);
 
-    struct ether_hdr *eth_hdr = rte_pktmbuf_mtod(pkt, struct ether_hdr *);
-    struct ipv4_hdr *ipv4_hdr = rte_pktmbuf_mtod_offset(pkt, struct ipv4_hdr *, ether_hdr_offset);
-    struct udp_hdr *udp_hdr = rte_pktmbuf_mtod_offset(pkt, struct udp_hdr *, ip_hdr_offset);
+    struct rte_ether_hdr *eth_hdr = rte_pktmbuf_mtod(pkt, struct rte_ether_hdr *);
+    struct rte_ipv4_hdr *ipv4_hdr = rte_pktmbuf_mtod_offset(pkt, struct rte_ipv4_hdr *, ether_hdr_offset);
+    struct rte_udp_hdr *udp_hdr = rte_pktmbuf_mtod_offset(pkt, struct rte_udp_hdr *, ip_hdr_offset);
 
 #ifdef ENABLE_KDNS_METRICS
     uint64_t start_time = time_now_usec();
 #endif
 
     conf->stats.pkts_rcv++;
-    if (unlikely(eth_hdr->ether_type != rte_cpu_to_be_16(ETHER_TYPE_IPv4))) {
+    if (unlikely(eth_hdr->ether_type != rte_cpu_to_be_16(RTE_ETHER_TYPE_IPV4))) {
         conf->kni_mbufs[conf->kni_len++] = pkt;
         return 0;
     }
@@ -124,9 +124,9 @@ static int packet_process(struct rte_mbuf *pkt, struct netif_queue_conf *conf, u
         rte_pktmbuf_free(pkt);
         return 0;
     }
-    uint16_t ip_hdr_len = (ipv4_hdr->version_ihl & IPV4_HDR_IHL_MASK) * IPV4_IHL_MULTIPLIER;
+    uint16_t ip_hdr_len = (ipv4_hdr->version_ihl & RTE_IPV4_HDR_IHL_MASK) * RTE_IPV4_IHL_MULTIPLIER;
     uint16_t ip_total_length = rte_be_to_cpu_16(ipv4_hdr->total_length);
-    if (unlikely(ip_hdr_len != sizeof(struct ipv4_hdr) || ip_total_length < ip_hdr_len || pkt->pkt_len < (sizeof(struct ether_hdr) + ip_total_length))) {
+    if (unlikely(ip_hdr_len != sizeof(struct rte_ipv4_hdr) || ip_total_length < ip_hdr_len || pkt->pkt_len < (sizeof(struct rte_ether_hdr) + ip_total_length))) {
         log_msg(LOG_ERR, "illegal pkt: pkt_len(%d), ip_hdr_len(%d), ip_total_length(%d)\n", pkt->pkt_len, ip_hdr_len, ip_total_length);
         conf->stats.pkt_len_err++;
         conf->stats.pkt_dropped++;
@@ -142,8 +142,8 @@ static int packet_process(struct rte_mbuf *pkt, struct netif_queue_conf *conf, u
     conf->stats.dns_lens_rcv += pkt->pkt_len;
 
     uint16_t udp_dgram_len = rte_be_to_cpu_16(udp_hdr->dgram_len);
-    int query_len = udp_dgram_len - sizeof(struct udp_hdr);
-    if (unlikely((ip_total_length != (sizeof(struct ipv4_hdr) + udp_dgram_len) || query_len < DNS_HEAD_SIZE))) {
+    int query_len = udp_dgram_len - sizeof(struct rte_udp_hdr);
+    if (unlikely((ip_total_length != (sizeof(struct rte_ipv4_hdr) + udp_dgram_len) || query_len < DNS_HEAD_SIZE))) {
         log_msg(LOG_ERR, "illegal pkt: ip_total_length(%d), udp_dgram_len(%d), query_len(%d)\n", ip_total_length, udp_dgram_len, query_len);
         conf->stats.pkt_len_err++;
         conf->stats.pkt_dropped++;
@@ -172,9 +172,9 @@ static int packet_process(struct rte_mbuf *pkt, struct netif_queue_conf *conf, u
         init_dns_packet_header(eth_hdr, ipv4_hdr, udp_hdr, ret_len);
         pkt->pkt_len = ret_len + udp_hdr_offset;
         pkt->data_len = pkt->pkt_len;
-        pkt->l2_len = sizeof(struct ether_hdr);
-        pkt->vlan_tci = ETHER_TYPE_IPv4;
-        pkt->l3_len = sizeof(struct ipv4_hdr);
+        pkt->l2_len = sizeof(struct rte_ether_hdr);
+        pkt->vlan_tci = RTE_ETHER_TYPE_IPV4;
+        pkt->l3_len = sizeof(struct rte_ipv4_hdr);
 
         conf->tx_mbufs[conf->tx_len++] = pkt;
         conf->stats.dns_lens_snd += pkt->pkt_len;
