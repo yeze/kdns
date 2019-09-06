@@ -88,6 +88,8 @@ int netdev_pmd_parse(const char *entry) {
     printf("netdev_pmd_parse pmd: %s.\n", entry);
     if (strcasecmp(entry, "af_packet") == 0) {
         return PMD_TYPE_AF_PACKET;
+    } else if (strcasecmp(entry, "libpcap") == 0) {
+        return PMD_TYPE_LIBPCAP;
     }
     return PMD_TYPE_PHYSICAL;
 }

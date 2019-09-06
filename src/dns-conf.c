@@ -299,6 +299,18 @@ static int config_file_load(struct dns_config *cfg, char *cfgfile_path, char *pr
     if (cfg->netdev.pmd == PMD_TYPE_AF_PACKET) {
         snprintf(cfg->eal.argv[cfg->eal.argc++], DPDK_MAX_ARG_LEN, "--vdev=eth_af_packet0,iface=%s,qpairs=%u,framecnt=%u",
                  cfg->netdev.kni_name_prefix, cfg->netdev.rxq_num, cfg->netdev.rxq_desc_num + cfg->netdev.txq_desc_num);
+    } else if (cfg->netdev.pmd == PMD_TYPE_LIBPCAP) {
+        int i;
+        char tmp[DPDK_MAX_ARG_LEN] = {0};
+
+        snprintf(tmp, DPDK_MAX_ARG_LEN, "--vdev=net_pcap0");
+        for (i = 0; i < cfg->netdev.rxq_num; ++i) {
+            snprintf(tmp + strlen(tmp), DPDK_MAX_ARG_LEN - strlen(tmp), ",rx_iface=%s", cfg->netdev.kni_name_prefix);
+        }
+        for (i = 0; i < cfg->netdev.txq_num; ++i) {
+            snprintf(tmp + strlen(tmp), DPDK_MAX_ARG_LEN - strlen(tmp), ",tx_iface=%s", cfg->netdev.kni_name_prefix);
+        }
+        snprintf(cfg->eal.argv[cfg->eal.argc++], DPDK_MAX_ARG_LEN, "%s", tmp);
     }
 
     rte_cfgfile_close(cfgfile);

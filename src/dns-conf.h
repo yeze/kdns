@@ -6,7 +6,7 @@
 #include "zone.h"
 
 #define DPDK_MAX_ARG_NUM    (32)
-#define DPDK_MAX_ARG_LEN    (128)
+#define DPDK_MAX_ARG_LEN    (1024)
 #define MAX_CONFIG_STR_LEN  (2048)
 
 struct config_update {
@@ -50,12 +50,14 @@ struct comm_config {
 
 typedef enum {
     PMD_TYPE_AF_PACKET,
+    PMD_TYPE_LIBPCAP,
     PMD_TYPE_PHYSICAL,
     PMD_TYPE_MAX,
 } pmd_type;
 
 static const char *pmd_str_array[PMD_TYPE_MAX] = {
         "af_packet",
+        "libpcap",
         "physical"
 };
 
