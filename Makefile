@@ -10,6 +10,14 @@ ifeq ($(machine),)
 machine = native
 endif
 
+ifeq ($(JOBS),)
+    JOBS := $(shell grep -c ^processor /proc/cpuinfo 2>/dev/null)
+    ifeq ($(JOBS),)
+        JOBS := 1
+    endif
+endif
+
+
 RTE_SDK_TAR = $(CURDIR)/dpdk-19.08.tar.xz
 RTE_SDK = $(CURDIR)/dpdk-19.08
 export RTE_SDK
@@ -38,8 +46,9 @@ dpdk:
 	$(Q)cd $(RTE_SDK) && sed -ri 's,(RTE_APP_TEST=).*,\1n,'         $(RTE_TARGET)/.config
 	$(Q)cd $(RTE_SDK) && sed -ri 's,(RTE_LIBRTE_PMD_PCAP=).*,\1y,'  $(RTE_TARGET)/.config
 	$(Q)cd $(RTE_SDK) && sed -ri 's,(RTE_KNI_KMOD_ETHTOOL=).*,\1n,' $(RTE_TARGET)/.config
+	$(Q)cd $(RTE_SDK) && sed -ri 's,(RTE_LIBRTE_PMD_AF_XDP=).*,\1y,' $(RTE_TARGET)/.config
 	$(Q)cd $(RTE_SDK) && sed -ri 's,(CFG_VALUE_LEN ).*,\1(2048),'   $(RTE_SDK)/lib/librte_cfgfile/rte_cfgfile.h
-	$(Q)cd $(RTE_SDK) && $(MAKE) O=$(RTE_TARGET)
+	$(Q)cd $(RTE_SDK) && $(MAKE) O=$(RTE_TARGET) -j ${JOBS}
 
 .PHONY: deps
 deps:

@@ -50,6 +50,7 @@ struct comm_config {
 
 typedef enum {
     PMD_TYPE_AF_PACKET,
+    PMD_TYPE_AF_XDP,
     PMD_TYPE_LIBPCAP,
     PMD_TYPE_PHYSICAL,
     PMD_TYPE_MAX,
@@ -57,6 +58,7 @@ typedef enum {
 
 static const char *pmd_str_array[PMD_TYPE_MAX] = {
         "af_packet",
+        "af_xdp",
         "libpcap",
         "physical"
 };
@@ -77,6 +79,7 @@ struct netdev_config {
     uint16_t txq_desc_num;
     uint16_t rxq_num;
     uint16_t txq_num;
+    uint16_t start_queue;
 
     char kni_name_prefix[32];
     uint32_t kni_mbuf_num;

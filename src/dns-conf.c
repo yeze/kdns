@@ -29,6 +29,7 @@ static void dns_config_init(struct dns_config *cfg) {
     memset(cfg, 0, sizeof(struct dns_config));
 
     cfg->netdev.pmd = PMD_TYPE_PHYSICAL;
+    cfg->netdev.start_queue = 0;
     cfg->netdev.mode = 0;                   //rss
     cfg->netdev.mbuf_num = 65535;
     cfg->netdev.rxq_desc_num = 1024;
@@ -73,6 +74,18 @@ static int eal_config_load(struct rte_cfgfile *cfgfile, struct eal_config *cfg, 
         return -1;
     }
 
+    entry = rte_cfgfile_get_entry(cfgfile, "EAL", "memory-mode");
+    if (entry) {
+        if (strcasecmp(entry, "legacy") == 0) {
+            snprintf(cfg->argv[cfg->argc++], DPDK_MAX_ARG_LEN, "--legacy-mem");
+        }
+    }
+
+    entry = rte_cfgfile_get_entry(cfgfile, "EAL", "iova-mode");
+    if (entry) {
+        snprintf(cfg->argv[cfg->argc++], DPDK_MAX_ARG_LEN, "--iova-mode=%s", entry);
+    }
+
     entry = rte_cfgfile_get_entry(cfgfile, "EAL", "mem-channels");
     if (entry) {
         snprintf(cfg->argv[cfg->argc++], DPDK_MAX_ARG_LEN, "-n%s", entry);
@@ -100,6 +113,16 @@ static int netdev_config_load(struct rte_cfgfile *cfgfile, struct netdev_config 
     entry = rte_cfgfile_get_entry(cfgfile, "NETDEV", "pmd");
     if (entry) {
         cfg->pmd = netdev_pmd_parse(entry);
+    }
+
+    if (cfg->pmd == PMD_TYPE_AF_XDP) {
+        entry = rte_cfgfile_get_entry(cfgfile, "NETDEV", "start-queue");
+        if (entry) {
+            if (parser_read_uint16(&cfg->start_queue, entry) < 0) {
+                printf("Cannot read NETDEV/start-queue = %s.\n", entry);
+                return -1;
+            }
+        }
     }
 
     entry = rte_cfgfile_get_entry(cfgfile, "NETDEV", "mode");
@@ -299,6 +322,9 @@ static int config_file_load(struct dns_config *cfg, char *cfgfile_path, char *pr
     if (cfg->netdev.pmd == PMD_TYPE_AF_PACKET) {
         snprintf(cfg->eal.argv[cfg->eal.argc++], DPDK_MAX_ARG_LEN, "--vdev=eth_af_packet0,iface=%s,qpairs=%u,framecnt=%u",
                  cfg->netdev.kni_name_prefix, cfg->netdev.rxq_num, cfg->netdev.rxq_desc_num + cfg->netdev.txq_desc_num);
+    } else if (cfg->netdev.pmd == PMD_TYPE_AF_XDP) {
+        snprintf(cfg->eal.argv[cfg->eal.argc++], DPDK_MAX_ARG_LEN, "--vdev=net_af_xdp0,iface=%s,start_queue=%u,queue_count=%u,pmd_zero_copy=1",
+                 cfg->netdev.kni_name_prefix, cfg->netdev.start_queue, cfg->netdev.rxq_num);
     } else if (cfg->netdev.pmd == PMD_TYPE_LIBPCAP) {
         int i;
         char tmp[DPDK_MAX_ARG_LEN] = {0};
